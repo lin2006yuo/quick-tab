@@ -1,0 +1,5 @@
+{
+  "name": "Tab Commander",
+  "description": "A Raycast-like command palette for managing Chrome tabs with tagging capabilities.",
+  "requestFramePermissions": []
+}
