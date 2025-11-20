@@ -10,7 +10,8 @@ const generateTabs = (): Tab[] => [
     url: "https://ai.google.dev/gemini-api/docs",
     favIconUrl: "https://www.google.com/favicon.ico",
     isActive: true,
-    tags: []
+    tags: [],
+    isPinned: false
   },
   {
     id: 2,
@@ -18,7 +19,8 @@ const generateTabs = (): Tab[] => [
     url: "https://react.dev/",
     favIconUrl: "https://react.dev/favicon.ico",
     isActive: false,
-    tags: ["Docs", "Frontend", "Library"]
+    tags: ["Docs", "Frontend", "Library"],
+    isPinned: false
   },
   {
     id: 3,
@@ -26,7 +28,8 @@ const generateTabs = (): Tab[] => [
     url: "https://tailwindcss.com/docs/utility-first",
     favIconUrl: "https://tailwindcss.com/favicon.ico",
     isActive: false,
-    tags: ["CSS", "Framework", "Utility", "Design System", "Reference"]
+    tags: ["CSS", "Framework", "Utility", "Design System", "Reference"],
+    isPinned: false
   },
   {
     id: 4,
@@ -34,7 +37,8 @@ const generateTabs = (): Tab[] => [
     url: "https://company.atlassian.net/browse/PROJ-1234",
     favIconUrl: "", 
     isActive: false,
-    tags: ["Work", "Jira", "Urgent", "Backend", "Sprint 42"]
+    tags: ["Work", "Jira", "Urgent", "Backend", "Sprint 42"],
+    isPinned: false
   },
   {
     id: 5,
@@ -42,7 +46,8 @@ const generateTabs = (): Tab[] => [
     url: "https://github.com/facebook/react",
     favIconUrl: "https://github.com/favicon.ico",
     isActive: false,
-    tags: ["Open Source", "Code", "Facebook"]
+    tags: ["Open Source", "Code", "Facebook"],
+    isPinned: false
   },
   {
     id: 6,
@@ -50,7 +55,8 @@ const generateTabs = (): Tab[] => [
     url: "https://youtube.com/watch?v=jfKfPfyJRdk",
     favIconUrl: "https://youtube.com/favicon.ico",
     isActive: false,
-    tags: ["Music", "Background", "Chill"]
+    tags: ["Music", "Background", "Chill"],
+    isPinned: false
   },
   {
     id: 7,
@@ -58,7 +64,8 @@ const generateTabs = (): Tab[] => [
     url: "https://stackoverflow.com/questions/1234/how-do-i-center-a-div",
     favIconUrl: "https://stackoverflow.com/favicon.ico",
     isActive: false,
-    tags: ["Dev", "Help", "CSS", "Layout", "Flexbox", "Grid"]
+    tags: ["Dev", "Help", "CSS", "Layout", "Flexbox", "Grid"],
+    isPinned: false
   },
   {
     id: 8,
@@ -66,7 +73,8 @@ const generateTabs = (): Tab[] => [
     url: "https://example.com",
     favIconUrl: "",
     isActive: false,
-    tags: ["Testing", "Edge Case"]
+    tags: ["Testing", "Edge Case"],
+    isPinned: false
   },
   {
     id: 9,
@@ -74,7 +82,8 @@ const generateTabs = (): Tab[] => [
     url: "https://example.com/tags",
     favIconUrl: "",
     isActive: false,
-    tags: ["Tag1", "Tag2", "Tag3", "Tag4", "Tag5", "Tag6", "Tag7", "Tag8", "Tag9", "Tag10", "Tag11", "Tag12"]
+    tags: ["Tag1", "Tag2", "Tag3", "Tag4", "Tag5", "Tag6", "Tag7", "Tag8", "Tag9", "Tag10", "Tag11", "Tag12"],
+    isPinned: false
   },
   {
     id: 10,
@@ -82,7 +91,8 @@ const generateTabs = (): Tab[] => [
     url: "https://example.com/longtags",
     favIconUrl: "",
     isActive: false,
-    tags: ["Super Long Tag Name For Testing Layout", "Another Extremely Long Tag To Check Overflow"]
+    tags: ["Super Long Tag Name For Testing Layout", "Another Extremely Long Tag To Check Overflow"],
+    isPinned: false
   },
   {
     id: 11,
@@ -90,7 +100,8 @@ const generateTabs = (): Tab[] => [
     url: "https://hub.docker.com",
     favIconUrl: "", 
     isActive: false,
-    tags: ["DevOps", "Containers"]
+    tags: ["DevOps", "Containers"],
+    isPinned: false
   },
   {
     id: 12,
@@ -98,7 +109,8 @@ const generateTabs = (): Tab[] => [
     url: "https://figma.com/file/123456",
     favIconUrl: "https://static.figma.com/app/icon/1/favicon.ico",
     isActive: false,
-    tags: ["Design", "Work", "Shared"]
+    tags: ["Design", "Work", "Shared"],
+    isPinned: false
   },
   {
     id: 13,
@@ -106,7 +118,8 @@ const generateTabs = (): Tab[] => [
     url: "https://developer.mozilla.org",
     favIconUrl: "https://developer.mozilla.org/favicon.ico",
     isActive: false,
-    tags: ["Reference"]
+    tags: ["Reference"],
+    isPinned: false
   },
   {
     id: 14,
@@ -114,7 +127,8 @@ const generateTabs = (): Tab[] => [
     url: "https://vercel.com/dashboard",
     favIconUrl: "https://assets.vercel.com/image/upload/q_auto/front/favicon/vercel/57x57.png",
     isActive: false,
-    tags: ["Deployment", "Hosting"]
+    tags: ["Deployment", "Hosting"],
+    isPinned: false
   },
   {
     id: 15,
@@ -122,7 +136,8 @@ const generateTabs = (): Tab[] => [
     url: "https://notion.so",
     favIconUrl: "https://www.notion.so/images/favicon.ico",
     isActive: false,
-    tags: ["Personal", "Notes", "Planning"]
+    tags: ["Personal", "Notes", "Planning"],
+    isPinned: false
   }
 ];
 

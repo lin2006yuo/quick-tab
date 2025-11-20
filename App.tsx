@@ -15,6 +15,7 @@ const App: React.FC = () => {
   
   // Visual Feedback State
   const [highlightedTabId, setHighlightedTabId] = useState<number | null>(null);
+  const [targetTabIdToSelect, setTargetTabIdToSelect] = useState<number | null>(null);
   
   // Navigation indices
   const [selectedTabIndex, setSelectedTabIndex] = useState(0);
@@ -22,6 +23,7 @@ const App: React.FC = () => {
 
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
+  const prevFilteredTabsRef = useRef<Tab[]>([]);
 
   // --- Derived State ---
 
@@ -32,19 +34,33 @@ const App: React.FC = () => {
       return tabs.filter(t => t.isActive);
     }
 
+    let result = tabs;
+
     // Case 2: Command Selection Mode -> Show all tabs (background context)
     if (inputMode === InputMode.COMMAND_SELECT) {
-       return tabs; 
+       result = tabs; 
+    }
+    // Case 3: Search Mode -> Filter by query
+    else if (query) {
+      const lowerQ = query.toLowerCase();
+      result = tabs.filter(t => 
+        t.title.toLowerCase().includes(lowerQ) || 
+        t.url.toLowerCase().includes(lowerQ) ||
+        t.tags.some(tag => tag.toLowerCase().includes(lowerQ))
+      );
     }
 
-    // Case 3: Search Mode -> Filter by query
-    if (!query) return tabs;
-    const lowerQ = query.toLowerCase();
-    return tabs.filter(t => 
-      t.title.toLowerCase().includes(lowerQ) || 
-      t.url.toLowerCase().includes(lowerQ) ||
-      t.tags.some(tag => tag.toLowerCase().includes(lowerQ))
-    );
+    // Sorting: Pinned tabs always come first, then sorted by pinnedAt time (append strategy)
+    return [...result].sort((a, b) => {
+      if (a.isPinned !== b.isPinned) {
+        return a.isPinned ? -1 : 1;
+      }
+      if (a.isPinned && b.isPinned) {
+        return (a.pinnedAt || 0) - (b.pinnedAt || 0);
+      }
+      // Maintain original relative order for unpinned items
+      return 0;
+    });
   }, [tabs, query, inputMode, activeCommand]);
 
   // Filter commands based on query (only in COMMAND_SELECT mode)
@@ -104,8 +120,28 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleGlobalKey);
   }, [isOpen, inputMode, query]);
 
-  // Reset selection indices
-  useEffect(() => { setSelectedTabIndex(0); }, [filteredTabs]);
+  // Manage Selection Index Logic
+  useEffect(() => {
+    // Determine if the list content actually changed from the last render
+    const listChanged = prevFilteredTabsRef.current !== filteredTabs;
+    prevFilteredTabsRef.current = filteredTabs;
+
+    if (targetTabIdToSelect !== null) {
+      // Priority 1: If we have a specific target tab to select (e.g. after pinning), find it
+      const newIndex = filteredTabs.findIndex(t => t.id === targetTabIdToSelect);
+      if (newIndex !== -1) {
+        setSelectedTabIndex(newIndex);
+      }
+      // Reset the target immediately so future renders don't get stuck trying to select it
+      setTargetTabIdToSelect(null);
+    } else if (listChanged) {
+      // Priority 2: If the list changed (e.g. typing search) AND we don't have a target, reset to top
+      setSelectedTabIndex(0);
+    }
+    // If neither happened (e.g. just clearing targetTabIdToSelect), we do nothing, 
+    // correctly preserving the current selection index.
+  }, [filteredTabs, targetTabIdToSelect]);
+
   useEffect(() => { setSelectedCommandIndex(0); }, [filteredCommands]);
 
 
@@ -134,22 +170,25 @@ const App: React.FC = () => {
   const executeMarkCommand = (tagName: string) => {
     if (!tagName.trim()) return;
     
-    let targetTabId: number | null = null;
+    // Robustly find active tab first
+    const activeTab = tabs.find(t => t.isActive);
+    const targetTabId = activeTab?.id;
 
-    setTabs(prev => prev.map(tab => {
-      if (tab.isActive) {
-        targetTabId = tab.id;
-        // Prevent duplicate tags
-        if (tab.tags.includes(tagName.trim())) return tab;
-        return { ...tab, tags: [...tab.tags, tagName.trim()] };
-      }
-      return tab;
-    }));
-
-    // Trigger Highlight Effect
     if (targetTabId) {
-      setHighlightedTabId(targetTabId);
-      setTimeout(() => setHighlightedTabId(null), 2000);
+        setTargetTabIdToSelect(targetTabId); // Preserve selection on this tab
+        
+        setTabs(prev => prev.map(tab => {
+            if (tab.id === targetTabId) {
+                // Prevent duplicate tags
+                if (tab.tags.includes(tagName.trim())) return tab;
+                return { ...tab, tags: [...tab.tags, tagName.trim()] };
+            }
+            return tab;
+        }));
+
+        // Trigger Highlight Effect
+        setHighlightedTabId(targetTabId);
+        setTimeout(() => setHighlightedTabId(null), 2000);
     }
 
     // Reset UI
@@ -162,6 +201,8 @@ const App: React.FC = () => {
     const trimmedTag = tagName.trim();
     if (!trimmedTag) return;
 
+    setTargetTabIdToSelect(tabId); // Keep selection on this tab
+
     setTabs(prev => prev.map(tab => {
       if (tab.id === tabId) {
         if (tab.tags.includes(trimmedTag)) return tab;
@@ -172,6 +213,7 @@ const App: React.FC = () => {
   };
 
   const handleRemoveTag = (tabId: number, tagToRemove: string) => {
+    setTargetTabIdToSelect(tabId); // Keep selection on this tab
     setTabs(prev => prev.map(tab => {
       if (tab.id === tabId) {
         return { ...tab, tags: tab.tags.filter(t => t !== tagToRemove) };
@@ -183,6 +225,8 @@ const App: React.FC = () => {
   const handleRenameTag = (tabId: number, oldTag: string, newTag: string) => {
     const trimmedNewTag = newTag.trim();
     if (trimmedNewTag === oldTag) return; // No change
+
+    setTargetTabIdToSelect(tabId); // Keep selection on this tab
 
     setTabs(prev => prev.map(tab => {
       if (tab.id !== tabId) return tab;
@@ -206,11 +250,108 @@ const App: React.FC = () => {
     }));
   };
 
+  const handleRenameTab = (tabId: number, newTitle: string) => {
+    if (!newTitle.trim()) return; // Don't allow empty titles
+    
+    setTargetTabIdToSelect(tabId); // Keep selection on this tab (important if sorting by name later)
+
+    setTabs(prev => prev.map(tab => {
+      if (tab.id === tabId) {
+        return { ...tab, title: newTitle.trim() };
+      }
+      return tab;
+    }));
+  };
+
+  const handleTogglePin = (tabId: number) => {
+    setTargetTabIdToSelect(tabId); // Follow the tab to its new position (pinned/unpinned)
+
+    setTabs(prev => prev.map(tab => {
+      if (tab.id === tabId) {
+        const newIsPinned = !tab.isPinned;
+        return { 
+          ...tab, 
+          isPinned: newIsPinned,
+          // When pinning, set current timestamp to allow sorting by pinned time (append strategy)
+          pinnedAt: newIsPinned ? Date.now() : undefined 
+        };
+      }
+      return tab;
+    }));
+  };
+  
+  // Reorder pinned tabs: move 'fromId' to the position of 'toId'
+  // if toId is 'END', move to the end of the list
+  const handleReorderPinnedTabs = (fromId: number, toId: number | 'END') => {
+      setTargetTabIdToSelect(fromId); // Ensure selection follows the dragged item
+
+      setTabs(prevTabs => {
+          // 1. Extract pinned tabs and sort them by current order
+          const pinnedTabs = prevTabs
+            .filter(t => t.isPinned)
+            .sort((a, b) => (a.pinnedAt || 0) - (b.pinnedAt || 0));
+            
+          const fromIndex = pinnedTabs.findIndex(t => t.id === fromId);
+          
+          let toIndex = -1;
+          if (toId === 'END') {
+              toIndex = pinnedTabs.length; // Insert at end
+          } else {
+              toIndex = pinnedTabs.findIndex(t => t.id === toId);
+          }
+          
+          if (fromIndex === -1 || toIndex === -1) return prevTabs;
+          
+          // 2. Move element in the pinned array
+          const item = pinnedTabs[fromIndex];
+          const newPinnedOrder = [...pinnedTabs];
+          newPinnedOrder.splice(fromIndex, 1);
+          
+          // If we removed the item from a lower index, the target index might need adjustment if we are inserting after
+          // But 'splice(index, 0, item)' always inserts *at* that index, shifting subsequent items right.
+          // So if toId was "Item B" and we want to insert before Item B, index is correct.
+          // If toId was 'END', index is length, so it appends.
+          // However, if we are moving DOWN the list, the removal shifts indices. 
+          // 'pinnedTabs' is a snapshot, so 'toIndex' based on snapshot is correct destination index relative to original list.
+          // But for array mutation:
+          // If from < to: we remove 'from' (indices > from shift down by 1). We want to insert at 'to'.
+          // Since 'to' index shifted down by 1, we should insert at 'to - 1'.
+          // Example: [A, B, C, D]. Move A (0) to C (2). Remove A -> [B, C, D]. Insert at 2? -> [B, C, A, D]. 
+          // Correct: A is now after C.
+          
+          // Correction for array mutation logic:
+          let insertIndex = toIndex;
+          if (fromIndex < toIndex) {
+              insertIndex = toIndex - 1;
+          }
+          
+          newPinnedOrder.splice(insertIndex, 0, item);
+          
+          // 3. Assign new "normalized" timestamps to preserve this specific order
+          const reorderedIds = new Map(newPinnedOrder.map((t, index) => [t.id, index]));
+          
+          return prevTabs.map(tab => {
+              if (tab.isPinned && reorderedIds.has(tab.id)) {
+                  return { ...tab, pinnedAt: reorderedIds.get(tab.id) };
+              }
+              return tab;
+          });
+      });
+  };
+
   const handleTabClick = (tab: Tab) => {
     // Requirement: "点击 tab 可以将 tab 内容显示会输入框"
     setQuery(tab.title);
     setInputMode(InputMode.SEARCH);
     inputRef.current?.focus();
+  };
+
+  // Helper to restore focus to main input after inline edits (rename, add tag, etc.)
+  const handleEditEnd = () => {
+    // Use timeout to ensure any local blur events settle and components unmount
+    setTimeout(() => {
+        inputRef.current?.focus();
+    }, 10);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -222,6 +363,45 @@ const App: React.FC = () => {
         setActiveCommand(null);
         return;
       }
+    }
+    
+    // Keyboard Reordering for Pinned Tabs (Alt + Up/Down)
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        e.preventDefault();
+        const currentTab = filteredTabs[selectedTabIndex];
+        
+        if (currentTab && currentTab.isPinned) {
+            // Get only pinned tabs from the filtered list to determine neighbors
+            const pinnedTabs = filteredTabs.filter(t => t.isPinned);
+            const currentIndexInPinned = pinnedTabs.findIndex(t => t.id === currentTab.id);
+            
+            if (e.key === 'ArrowUp' && currentIndexInPinned > 0) {
+                const targetTab = pinnedTabs[currentIndexInPinned - 1];
+                handleReorderPinnedTabs(currentTab.id, targetTab.id);
+            } else if (e.key === 'ArrowDown' && currentIndexInPinned < pinnedTabs.length - 1) {
+                const targetTab = pinnedTabs[currentIndexInPinned + 1];
+                handleReorderPinnedTabs(currentTab.id, targetTab.id); // Insert before next is effectively swapping down
+                // Actually, inserting before the next one swaps active with next.
+                // If I am A, and Next is B. I want to be after B.
+                // Reorder(A, B) inserts A before B. That's not moving down.
+                // Reorder(A, C) inserts A before C (after B).
+                
+                // Fix for Keyboard: To move DOWN, we need to target the item *after* the immediate neighbor
+                // OR use the 'END' logic if it's the second to last item.
+                // Example: [A, B, C]. Move A down. Target C. Result: [B, A, C]. Correct.
+                // Example: [A, B]. Move A down. Target END. Result: [B, A]. Correct.
+                
+                const nextNeighbor = pinnedTabs[currentIndexInPinned + 1];
+                const targetAfterNeighbor = pinnedTabs[currentIndexInPinned + 2];
+                
+                if (targetAfterNeighbor) {
+                    handleReorderPinnedTabs(currentTab.id, targetAfterNeighbor.id);
+                } else {
+                    handleReorderPinnedTabs(currentTab.id, 'END');
+                }
+            }
+        }
+        return;
     }
 
     if (e.key === 'ArrowDown') {
@@ -382,11 +562,15 @@ const App: React.FC = () => {
               onRemoveTag={handleRemoveTag}
               onRenameTag={handleRenameTag}
               onAddTag={handleAddTag}
+              onRenameTab={handleRenameTab}
+              onTogglePin={handleTogglePin}
+              onEditEnd={handleEditEnd}
+              onReorderPinnedTabs={handleReorderPinnedTabs}
             />
         </div>
         
         {/* Footer */}
-        <div className="px-4 py-2 bg-white border-t border-slate-100 text-[10px] text-slate-400 flex justify-between items-center shadow-[0_-1px_2px_rgba(0,0,0,0.02)] relative z-20">
+        <div className="px-4 py-2 bg-white border-t border-slate-100 text-[10px] text-slate-400 flex flex-between items-center shadow-[0_-1px_2px_rgba(0,0,0,0.02)] relative z-20 justify-between">
             <div className="flex gap-3">
                 {inputMode === InputMode.COMMAND_ACTIVE && activeCommand?.id === CommandType.MARK ? (
                      <span className="text-indigo-500 font-medium">Press Enter to apply tag</span>
@@ -395,6 +579,9 @@ const App: React.FC = () => {
                 )}
             </div>
             <div className="flex gap-3">
+                <span className="flex items-center gap-1">
+                    <kbd className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[9px] font-sans text-slate-500">Alt</kbd> + <kbd className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[9px] font-sans text-slate-500">↑↓</kbd> sort
+                </span>
                 <span className="flex items-center gap-1">
                     <kbd className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[9px] font-sans text-slate-500">↑↓</kbd> navigate
                 </span>

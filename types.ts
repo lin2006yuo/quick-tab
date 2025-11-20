@@ -7,6 +7,8 @@ export interface Tab {
   favIconUrl: string;
   isActive: boolean;
   tags: string[];
+  isPinned: boolean;
+  pinnedAt?: number;
 }
 
 export enum InputMode {
