@@ -1,11 +1,13 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { X } from 'lucide-react';
 import { INITIAL_TABS, AVAILABLE_COMMANDS, INITIAL_BOOKMARK_GROUPS, getDomain } from './constants';
 import { Tab, InputMode, CommandDefinition, CommandType, ViewMode, BookmarkGroup } from './types';
 import TabList from './components/TabList';
 import TabDetails from './components/TabDetails';
 import CommandMenu from './components/CommandMenu';
 import Toolbar from './components/Toolbar';
-import { AppIcon, CmdKeyIcon } from './components/CommandIcon';
+import { AppIcon } from './components/CommandIcon';
 
 const App: React.FC = () => {
   // --- State ---
@@ -680,7 +682,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <div className="flex-1 relative h-9 flex items-center">
+        <div className="flex-1 relative h-9 flex items-center group/input">
           {inputMode === InputMode.COMMAND_SELECT && ghostSuffix && (
             <div className="absolute inset-0 pointer-events-none flex items-center text-lg overflow-hidden pl-[1px]" aria-hidden="true">
               <span className="invisible whitespace-pre">{query}</span>
@@ -699,20 +701,31 @@ const App: React.FC = () => {
                 ? "Type tag name..."
                 : "Search tabs or type '/'..."
             }
-            className="w-full h-full bg-transparent text-lg outline-none text-slate-700 placeholder:text-slate-400 font-normal"
+            className="w-full h-full bg-transparent text-lg outline-none text-slate-700 placeholder:text-slate-400 font-normal pr-8"
             autoComplete="off"
             autoFocus
           />
+
+          {query.length > 0 && (
+            <button 
+              onClick={() => {
+                setQuery('');
+                if (inputMode === InputMode.COMMAND_SELECT) {
+                  setInputMode(InputMode.SEARCH);
+                }
+                inputRef.current?.focus();
+              }}
+              className="absolute right-0 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-slate-100 text-slate-300 hover:text-slate-500 opacity-0 group-hover/input:opacity-100 transition-all"
+              title="Clear"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
-            {inputMode === InputMode.COMMAND_ACTIVE ? (
+            {inputMode === InputMode.COMMAND_ACTIVE && (
                 <span className="text-xs text-slate-400 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">Esc to cancel</span>
-            ) : (
-                <div className="flex items-center gap-1">
-                   <CmdKeyIcon />
-                   <span className="text-xs font-medium text-slate-400">E</span>
-                </div>
             )}
         </div>
       </div>
@@ -809,6 +822,9 @@ const App: React.FC = () => {
                        <kbd className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[9px] font-sans text-slate-500">Alt</kbd> + <kbd className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[9px] font-sans text-slate-500">↑↓</kbd> sort
                    </span>
                 )}
+                <span className="flex items-center gap-1">
+                    <kbd className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[9px] font-sans text-slate-500">×2</kbd> click details
+                </span>
                 <span className="flex items-center gap-1">
                     <kbd className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[9px] font-sans text-slate-500">↑↓</kbd> navigate
                 </span>

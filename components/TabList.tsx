@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { Tab, ViewMode, BookmarkGroup } from '../types';
 import { getDomain } from '../constants';
@@ -298,6 +299,7 @@ const TitleItem: React.FC<TitleItemProps> = ({ title, isSelected, isBookmarked, 
                 e.stopPropagation();
                 if (onDoubleClick) onDoubleClick();
             }}
+            title={onDoubleClick ? "Double-click to view details" : title}
         >
             <span className={`truncate text-sm ${isSelected ? 'font-medium text-slate-900' : 'text-slate-700'}`}>
                 {title}
@@ -454,7 +456,10 @@ const TabList: React.FC<TabListProps> = ({
       const midPoint = row.top + row.height / 2;
       const position = e.clientY < midPoint ? 'top' : 'bottom';
       
-      setDropIndicator({ id: tab.id, position });
+      // Only update state if different to avoid renders
+      if (dropIndicator?.id !== tab.id || dropIndicator?.position !== position) {
+          setDropIndicator({ id: tab.id, position });
+      }
   };
   
   const handleDropPinned = (e: React.DragEvent, targetTabId: number) => {
@@ -462,8 +467,13 @@ const TabList: React.FC<TabListProps> = ({
       e.stopPropagation(); // Fix: Stop propagation to prevent parent handlers
       const sourceTabId = parseInt(e.dataTransfer.getData('text/plain'), 10);
       
-      if (!isNaN(sourceTabId) && sourceTabId !== targetTabId && dropIndicator) {
-          if (dropIndicator.position === 'top') {
+      // Recalculate position to ensure accuracy and avoid state race conditions
+      const row = e.currentTarget.getBoundingClientRect();
+      const midPoint = row.top + row.height / 2;
+      const position = e.clientY < midPoint ? 'top' : 'bottom';
+      
+      if (!isNaN(sourceTabId) && sourceTabId !== targetTabId) {
+          if (position === 'top') {
               onReorderPinnedTabs(sourceTabId, targetTabId);
           } else {
               const pinnedTabsList = pinnedTabs; 
