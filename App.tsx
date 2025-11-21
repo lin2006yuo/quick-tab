@@ -1,21 +1,33 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { INITIAL_TABS, AVAILABLE_COMMANDS } from './constants';
-import { Tab, InputMode, CommandDefinition, CommandType } from './types';
+import { INITIAL_TABS, AVAILABLE_COMMANDS, INITIAL_BOOKMARK_GROUPS, getDomain } from './constants';
+import { Tab, InputMode, CommandDefinition, CommandType, ViewMode, BookmarkGroup } from './types';
 import TabList from './components/TabList';
+import TabDetails from './components/TabDetails';
 import CommandMenu from './components/CommandMenu';
+import Toolbar from './components/Toolbar';
 import { AppIcon, CmdKeyIcon } from './components/CommandIcon';
 
 const App: React.FC = () => {
   // --- State ---
   const [isOpen, setIsOpen] = useState(true);
   const [tabs, setTabs] = useState<Tab[]>(INITIAL_TABS);
+  const [bookmarkGroups, setBookmarkGroups] = useState<BookmarkGroup[]>(INITIAL_BOOKMARK_GROUPS);
   const [query, setQuery] = useState('');
   const [inputMode, setInputMode] = useState<InputMode>(InputMode.SEARCH);
   const [activeCommand, setActiveCommand] = useState<CommandDefinition | null>(null);
   
-  // Visual Feedback State
+  // Window State
+  const [windowPos, setWindowPos] = useState({ x: 100, y: 100 });
+  const [windowSize, setWindowSize] = useState({ width: 650, height: 600 });
+  
+  // UI State
+  const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.LIST);
+  const [isPinnedExpanded, setIsPinnedExpanded] = useState(true);
   const [highlightedTabId, setHighlightedTabId] = useState<number | null>(null);
   const [targetTabIdToSelect, setTargetTabIdToSelect] = useState<number | null>(null);
+  
+  // Details View State
+  const [detailTabId, setDetailTabId] = useState<number | null>(null);
   
   // Navigation indices
   const [selectedTabIndex, setSelectedTabIndex] = useState(0);
@@ -23,24 +35,26 @@ const App: React.FC = () => {
 
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const prevFilteredTabsRef = useRef<Tab[]>([]);
+  const dragRef = useRef<{ startX: number, startY: number, startLeft: number, startTop: number } | null>(null);
+  const resizeRef = useRef<{ startX: number, startY: number, startW: number, startH: number, direction: string } | null>(null);
+  const animationFrameRef = useRef<number>(0);
+
 
   // --- Derived State ---
 
-  // Filter tabs based on query and mode
+  // 1. Filter tabs based on query and mode (Raw Filtered List)
   const filteredTabs = useMemo(() => {
-    // Case 1: In Mark Command Mode -> Show only the active tab so user knows what they are marking
     if (inputMode === InputMode.COMMAND_ACTIVE && activeCommand?.id === CommandType.MARK) {
       return tabs.filter(t => t.isActive);
     }
 
     let result = tabs;
 
-    // Case 2: Command Selection Mode -> Show all tabs (background context)
     if (inputMode === InputMode.COMMAND_SELECT) {
        result = tabs; 
     }
-    // Case 3: Search Mode -> Filter by query
     else if (query) {
       const lowerQ = query.toLowerCase();
       result = tabs.filter(t => 
@@ -50,23 +64,68 @@ const App: React.FC = () => {
       );
     }
 
-    // Sorting: Pinned tabs always come first, then sorted by pinnedAt time (append strategy)
+    if (viewMode === ViewMode.GROUPS) {
+      // In Group mode, sort by Domain -> Pinned -> Title
+      return [...result].sort((a, b) => {
+        const domainA = getDomain(a.url);
+        const domainB = getDomain(b.url);
+        const domainCompare = domainA.localeCompare(domainB);
+        if (domainCompare !== 0) return domainCompare;
+        if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+        return a.title.localeCompare(b.title);
+      });
+    }
+
+    if (viewMode === ViewMode.BOOKMARKS) {
+        // Only show bookmarked items
+        const bookmarked = result.filter(t => t.isBookmarked);
+        // Sort by Group ID to ensure visual consistency with the group rendering
+        // Then by title
+        return bookmarked.sort((a, b) => {
+            const groupA = a.bookmarkGroupId || '';
+            const groupB = b.bookmarkGroupId || '';
+            const groupCompare = groupA.localeCompare(groupB);
+            if (groupCompare !== 0) return groupCompare;
+            return a.title.localeCompare(b.title);
+        });
+    }
+
+    // In List mode, Pinned items first
     return [...result].sort((a, b) => {
-      if (a.isPinned !== b.isPinned) {
-        return a.isPinned ? -1 : 1;
-      }
       if (a.isPinned && b.isPinned) {
         return (a.pinnedAt || 0) - (b.pinnedAt || 0);
       }
-      // Maintain original relative order for unpinned items
       return 0;
     });
-  }, [tabs, query, inputMode, activeCommand]);
+  }, [tabs, query, inputMode, activeCommand, viewMode]);
 
-  // Filter commands based on query (only in COMMAND_SELECT mode)
+  // 2. Split into Pinned and Unpinned (Only for LIST mode)
+  const pinnedTabs = useMemo(() => filteredTabs.filter(t => t.isPinned), [filteredTabs]);
+  const unpinnedTabs = useMemo(() => filteredTabs.filter(t => !t.isPinned), [filteredTabs]);
+
+  // 3. Construct the "Visible" list for Keyboard Navigation and Selection Indexing
+  const visibleTabs = useMemo(() => {
+      if (viewMode === ViewMode.GROUPS || viewMode === ViewMode.BOOKMARKS) {
+        // In groups/bookmarks mode, everything in the filtered list is visible
+        return filteredTabs;
+      }
+
+      // In LIST mode, respect the pinned expansion
+      if (isPinnedExpanded) {
+          return [...pinnedTabs, ...unpinnedTabs];
+      }
+      return unpinnedTabs;
+  }, [isPinnedExpanded, pinnedTabs, unpinnedTabs, viewMode, filteredTabs]);
+
+  // 4. Get Active Details Tab
+  const detailTab = useMemo(() => {
+      return tabs.find(t => t.id === detailTabId);
+  }, [tabs, detailTabId]);
+
+
   const filteredCommands = useMemo(() => {
     if (inputMode !== InputMode.COMMAND_SELECT) return [];
-    const cmdQuery = query.slice(1).toLowerCase(); // remove '/'
+    const cmdQuery = query.slice(1).toLowerCase();
     return AVAILABLE_COMMANDS.filter(cmd => 
       cmd.trigger.includes(cmdQuery)
     );
@@ -74,12 +133,9 @@ const App: React.FC = () => {
 
   const selectedCommand = filteredCommands[selectedCommandIndex];
 
-  // Calculate ghost text suffix (the part of command not yet typed)
   const ghostSuffix = useMemo(() => {
     if (inputMode !== InputMode.COMMAND_SELECT || !selectedCommand) return '';
-    
     const fullTrigger = `/${selectedCommand.trigger}`;
-    // Check if current query matches the start of this command
     if (fullTrigger.toLowerCase().startsWith(query.toLowerCase())) {
         return fullTrigger.slice(query.length);
     }
@@ -87,8 +143,28 @@ const App: React.FC = () => {
   }, [query, inputMode, selectedCommand]);
 
   // --- Effects ---
+  
+  // Initialize Position
+  useEffect(() => {
+      setWindowPos({
+          x: Math.max(0, window.innerWidth / 2 - 325),
+          y: 100
+      });
+      
+      return () => {
+          if (animationFrameRef.current) {
+              cancelAnimationFrame(animationFrameRef.current);
+          }
+      };
+  }, []);
 
-  // Global Hotkey Listener (Cmd+E)
+  // Auto-expand Pinned section when searching
+  useEffect(() => {
+      if (query.length > 0) {
+          setIsPinnedExpanded(true);
+      }
+  }, [query]);
+
   useEffect(() => {
     const handleGlobalKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'e') {
@@ -98,11 +174,30 @@ const App: React.FC = () => {
           setQuery('');
           setInputMode(InputMode.SEARCH);
           setActiveCommand(null);
+          setDetailTabId(null);
           setTimeout(() => inputRef.current?.focus(), 50);
         }
       }
-      
+
+      // Switch View Mode shortcuts
+      if ((e.metaKey || e.ctrlKey) && e.key === '1') {
+        e.preventDefault();
+        setViewMode(ViewMode.LIST);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '2') {
+        e.preventDefault();
+        setViewMode(ViewMode.GROUPS);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '3') {
+        e.preventDefault();
+        setViewMode(ViewMode.BOOKMARKS);
+      }
+
       if (e.key === 'Escape') {
+        if (detailTabId !== null) {
+            setDetailTabId(null);
+            return;
+        }
         if (inputMode === InputMode.COMMAND_ACTIVE) {
           setInputMode(InputMode.SEARCH);
           setActiveCommand(null);
@@ -115,83 +210,177 @@ const App: React.FC = () => {
         }
       }
     };
-
     window.addEventListener('keydown', handleGlobalKey);
     return () => window.removeEventListener('keydown', handleGlobalKey);
-  }, [isOpen, inputMode, query]);
+  }, [isOpen, inputMode, query, detailTabId]);
 
-  // Manage Selection Index Logic
+  // Selection Index Logic
   useEffect(() => {
-    // Determine if the list content actually changed from the last render
-    const listChanged = prevFilteredTabsRef.current !== filteredTabs;
-    prevFilteredTabsRef.current = filteredTabs;
+    const listChanged = prevFilteredTabsRef.current !== visibleTabs;
+    prevFilteredTabsRef.current = visibleTabs;
 
     if (targetTabIdToSelect !== null) {
-      // Priority 1: If we have a specific target tab to select (e.g. after pinning), find it
-      const newIndex = filteredTabs.findIndex(t => t.id === targetTabIdToSelect);
+      const newIndex = visibleTabs.findIndex(t => t.id === targetTabIdToSelect);
       if (newIndex !== -1) {
         setSelectedTabIndex(newIndex);
       }
-      // Reset the target immediately so future renders don't get stuck trying to select it
       setTargetTabIdToSelect(null);
     } else if (listChanged) {
-      // Priority 2: If the list changed (e.g. typing search) AND we don't have a target, reset to top
       setSelectedTabIndex(0);
     }
-    // If neither happened (e.g. just clearing targetTabIdToSelect), we do nothing, 
-    // correctly preserving the current selection index.
-  }, [filteredTabs, targetTabIdToSelect]);
+  }, [visibleTabs, targetTabIdToSelect]);
 
   useEffect(() => { setSelectedCommandIndex(0); }, [filteredCommands]);
 
 
   // --- Handlers ---
+  
+  // Drag Handlers
+  const handleMouseDownDrag = (e: React.MouseEvent) => {
+      if ((e.target as HTMLElement).closest('button, input, textarea')) return;
+      
+      dragRef.current = {
+          startX: e.clientX,
+          startY: e.clientY,
+          startLeft: windowPos.x,
+          startTop: windowPos.y
+      };
+      document.addEventListener('mousemove', handleMouseMoveDrag);
+      document.addEventListener('mouseup', handleMouseUpDrag);
+  };
+  
+  const handleMouseMoveDrag = (e: MouseEvent) => {
+      if (!dragRef.current || !containerRef.current) return;
+      
+      const dx = e.clientX - dragRef.current.startX;
+      const dy = e.clientY - dragRef.current.startY;
+
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = requestAnimationFrame(() => {
+          if (containerRef.current) {
+              containerRef.current.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+          }
+      });
+  };
+
+  const handleMouseUpDrag = (e: MouseEvent) => {
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      
+      if (dragRef.current && containerRef.current) {
+          const dx = e.clientX - dragRef.current.startX;
+          const dy = e.clientY - dragRef.current.startY;
+          
+          const newX = dragRef.current.startLeft + dx;
+          const newY = dragRef.current.startTop + dy;
+
+          setWindowPos({ x: newX, y: newY });
+          containerRef.current.style.transform = 'none';
+          containerRef.current.style.left = `${newX}px`;
+          containerRef.current.style.top = `${newY}px`;
+      }
+      dragRef.current = null;
+      document.removeEventListener('mousemove', handleMouseMoveDrag);
+      document.removeEventListener('mouseup', handleMouseUpDrag);
+  };
+  
+  // Resize Handlers
+  const handleMouseDownResize = (e: React.MouseEvent, direction: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      resizeRef.current = {
+          startX: e.clientX,
+          startY: e.clientY,
+          startW: windowSize.width,
+          startH: windowSize.height,
+          direction
+      };
+      document.addEventListener('mousemove', handleMouseMoveResize);
+      document.addEventListener('mouseup', handleMouseUpResize);
+  };
+
+  const handleMouseMoveResize = (e: MouseEvent) => {
+      if (!resizeRef.current || !containerRef.current) return;
+      
+      const dx = e.clientX - resizeRef.current.startX;
+      const dy = e.clientY - resizeRef.current.startY;
+      
+      let newW = resizeRef.current.startW;
+      let newH = resizeRef.current.startH;
+
+      if (resizeRef.current.direction.includes('right')) newW += dx;
+      if (resizeRef.current.direction.includes('bottom')) newH += dy;
+
+      newW = Math.max(400, newW);
+      newH = Math.max(300, newH);
+
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = requestAnimationFrame(() => {
+          if (containerRef.current) {
+              containerRef.current.style.width = `${newW}px`;
+              containerRef.current.style.height = `${newH}px`;
+          }
+      });
+  };
+
+  const handleMouseUpResize = (e: MouseEvent) => {
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+
+      if (resizeRef.current && containerRef.current) {
+          const dx = e.clientX - resizeRef.current.startX;
+          const dy = e.clientY - resizeRef.current.startY;
+          
+          let newW = resizeRef.current.startW;
+          let newH = resizeRef.current.startH;
+
+          if (resizeRef.current.direction.includes('right')) newW += dx;
+          if (resizeRef.current.direction.includes('bottom')) newH += dy;
+
+          newW = Math.max(400, newW);
+          newH = Math.max(300, newH);
+
+          setWindowSize({ width: newW, height: newH });
+          
+          containerRef.current.style.width = `${newW}px`;
+          containerRef.current.style.height = `${newH}px`;
+      }
+      resizeRef.current = null;
+      document.removeEventListener('mousemove', handleMouseMoveResize);
+      document.removeEventListener('mouseup', handleMouseUpResize);
+  };
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
-    
-    // 1. Trigger Command Select Mode
     if (inputMode === InputMode.SEARCH && val === '/') {
       setInputMode(InputMode.COMMAND_SELECT);
       setQuery(val);
       return;
     }
-
-    // 2. Exit Command Select Mode if backspace removes '/'
     if (inputMode === InputMode.COMMAND_SELECT && val === '') {
       setInputMode(InputMode.SEARCH);
       setQuery('');
       return;
     }
-
     setQuery(val);
   };
 
   const executeMarkCommand = (tagName: string) => {
     if (!tagName.trim()) return;
-    
-    // Robustly find active tab first
     const activeTab = tabs.find(t => t.isActive);
     const targetTabId = activeTab?.id;
 
     if (targetTabId) {
-        setTargetTabIdToSelect(targetTabId); // Preserve selection on this tab
-        
+        setTargetTabIdToSelect(targetTabId);
         setTabs(prev => prev.map(tab => {
             if (tab.id === targetTabId) {
-                // Prevent duplicate tags
                 if (tab.tags.includes(tagName.trim())) return tab;
                 return { ...tab, tags: [...tab.tags, tagName.trim()] };
             }
             return tab;
         }));
-
-        // Trigger Highlight Effect
         setHighlightedTabId(targetTabId);
         setTimeout(() => setHighlightedTabId(null), 2000);
     }
-
-    // Reset UI
     setQuery('');
     setInputMode(InputMode.SEARCH);
     setActiveCommand(null);
@@ -200,9 +389,7 @@ const App: React.FC = () => {
   const handleAddTag = (tabId: number, tagName: string) => {
     const trimmedTag = tagName.trim();
     if (!trimmedTag) return;
-
-    setTargetTabIdToSelect(tabId); // Keep selection on this tab
-
+    setTargetTabIdToSelect(tabId);
     setTabs(prev => prev.map(tab => {
       if (tab.id === tabId) {
         if (tab.tags.includes(trimmedTag)) return tab;
@@ -213,7 +400,7 @@ const App: React.FC = () => {
   };
 
   const handleRemoveTag = (tabId: number, tagToRemove: string) => {
-    setTargetTabIdToSelect(tabId); // Keep selection on this tab
+    setTargetTabIdToSelect(tabId);
     setTabs(prev => prev.map(tab => {
       if (tab.id === tabId) {
         return { ...tab, tags: tab.tags.filter(t => t !== tagToRemove) };
@@ -224,25 +411,16 @@ const App: React.FC = () => {
 
   const handleRenameTag = (tabId: number, oldTag: string, newTag: string) => {
     const trimmedNewTag = newTag.trim();
-    if (trimmedNewTag === oldTag) return; // No change
-
-    setTargetTabIdToSelect(tabId); // Keep selection on this tab
-
+    if (trimmedNewTag === oldTag) return;
+    setTargetTabIdToSelect(tabId);
     setTabs(prev => prev.map(tab => {
       if (tab.id !== tabId) return tab;
-      
-      // If new tag is empty, treat as delete
       if (!trimmedNewTag) {
         return { ...tab, tags: tab.tags.filter(t => t !== oldTag) };
       }
-
-      // Check if new tag already exists (merge)
       if (tab.tags.includes(trimmedNewTag)) {
-        // Remove the old tag, keep the existing new tag (effectively merging)
         return { ...tab, tags: tab.tags.filter(t => t !== oldTag) };
       }
-
-      // Standard rename
       return {
         ...tab,
         tags: tab.tags.map(t => t === oldTag ? trimmedNewTag : t)
@@ -251,10 +429,8 @@ const App: React.FC = () => {
   };
 
   const handleRenameTab = (tabId: number, newTitle: string) => {
-    if (!newTitle.trim()) return; // Don't allow empty titles
-    
-    setTargetTabIdToSelect(tabId); // Keep selection on this tab (important if sorting by name later)
-
+    if (!newTitle.trim()) return;
+    setTargetTabIdToSelect(tabId);
     setTabs(prev => prev.map(tab => {
       if (tab.id === tabId) {
         return { ...tab, title: newTitle.trim() };
@@ -263,16 +439,23 @@ const App: React.FC = () => {
     }));
   };
 
-  const handleTogglePin = (tabId: number) => {
-    setTargetTabIdToSelect(tabId); // Follow the tab to its new position (pinned/unpinned)
+  const handleUpdateNote = (tabId: number, note: string) => {
+      setTabs(prev => prev.map(tab => {
+          if (tab.id === tabId) {
+              return { ...tab, note };
+          }
+          return tab;
+      }));
+  };
 
+  const handleTogglePin = (tabId: number) => {
+    setTargetTabIdToSelect(tabId);
     setTabs(prev => prev.map(tab => {
       if (tab.id === tabId) {
         const newIsPinned = !tab.isPinned;
         return { 
           ...tab, 
           isPinned: newIsPinned,
-          // When pinning, set current timestamp to allow sorting by pinned time (append strategy)
           pinnedAt: newIsPinned ? Date.now() : undefined 
         };
       }
@@ -280,13 +463,11 @@ const App: React.FC = () => {
     }));
   };
   
-  // Reorder pinned tabs: move 'fromId' to the position of 'toId'
-  // if toId is 'END', move to the end of the list
   const handleReorderPinnedTabs = (fromId: number, toId: number | 'END') => {
-      setTargetTabIdToSelect(fromId); // Ensure selection follows the dragged item
+      if (viewMode === ViewMode.GROUPS || viewMode === ViewMode.BOOKMARKS) return;
 
+      setTargetTabIdToSelect(fromId);
       setTabs(prevTabs => {
-          // 1. Extract pinned tabs and sort them by current order
           const pinnedTabs = prevTabs
             .filter(t => t.isPinned)
             .sort((a, b) => (a.pinnedAt || 0) - (b.pinnedAt || 0));
@@ -295,31 +476,17 @@ const App: React.FC = () => {
           
           let toIndex = -1;
           if (toId === 'END') {
-              toIndex = pinnedTabs.length; // Insert at end
+              toIndex = pinnedTabs.length;
           } else {
               toIndex = pinnedTabs.findIndex(t => t.id === toId);
           }
           
           if (fromIndex === -1 || toIndex === -1) return prevTabs;
           
-          // 2. Move element in the pinned array
           const item = pinnedTabs[fromIndex];
           const newPinnedOrder = [...pinnedTabs];
           newPinnedOrder.splice(fromIndex, 1);
           
-          // If we removed the item from a lower index, the target index might need adjustment if we are inserting after
-          // But 'splice(index, 0, item)' always inserts *at* that index, shifting subsequent items right.
-          // So if toId was "Item B" and we want to insert before Item B, index is correct.
-          // If toId was 'END', index is length, so it appends.
-          // However, if we are moving DOWN the list, the removal shifts indices. 
-          // 'pinnedTabs' is a snapshot, so 'toIndex' based on snapshot is correct destination index relative to original list.
-          // But for array mutation:
-          // If from < to: we remove 'from' (indices > from shift down by 1). We want to insert at 'to'.
-          // Since 'to' index shifted down by 1, we should insert at 'to - 1'.
-          // Example: [A, B, C, D]. Move A (0) to C (2). Remove A -> [B, C, D]. Insert at 2? -> [B, C, A, D]. 
-          // Correct: A is now after C.
-          
-          // Correction for array mutation logic:
           let insertIndex = toIndex;
           if (fromIndex < toIndex) {
               insertIndex = toIndex - 1;
@@ -327,8 +494,9 @@ const App: React.FC = () => {
           
           newPinnedOrder.splice(insertIndex, 0, item);
           
-          // 3. Assign new "normalized" timestamps to preserve this specific order
-          const reorderedIds = new Map(newPinnedOrder.map((t, index) => [t.id, index]));
+          // Assign strictly increasing timestamps to maintain robust order
+          const baseTime = Date.now();
+          const reorderedIds = new Map(newPinnedOrder.map((t, index) => [t.id, baseTime + index]));
           
           return prevTabs.map(tab => {
               if (tab.isPinned && reorderedIds.has(tab.id)) {
@@ -339,23 +507,55 @@ const App: React.FC = () => {
       });
   };
 
+  // --- Bookmark Handlers ---
+  const handleToggleBookmark = (tabId: number) => {
+      setTargetTabIdToSelect(tabId);
+      setTabs(prev => prev.map(tab => {
+          if (tab.id === tabId) {
+              const isBookmarked = !tab.isBookmarked;
+              return {
+                  ...tab,
+                  isBookmarked,
+                  bookmarkGroupId: isBookmarked ? (tab.bookmarkGroupId || bookmarkGroups[0]?.id) : undefined
+              };
+          }
+          return tab;
+      }));
+  };
+
+  const handleMoveBookmark = (tabId: number, targetGroupId: string) => {
+      setTargetTabIdToSelect(tabId);
+      setTabs(prev => prev.map(tab => {
+          if (tab.id === tabId) {
+              return { ...tab, bookmarkGroupId: targetGroupId };
+          }
+          return tab;
+      }));
+  };
+
+  const handleCreateBookmarkGroup = (title: string) => {
+      if (!title.trim()) return;
+      const newGroup: BookmarkGroup = {
+          id: `group-${Date.now()}`,
+          title: title.trim()
+      };
+      setBookmarkGroups(prev => [...prev, newGroup]);
+  };
+
+
   const handleTabClick = (tab: Tab) => {
-    // Requirement: "点击 tab 可以将 tab 内容显示会输入框"
     setQuery(tab.title);
     setInputMode(InputMode.SEARCH);
     inputRef.current?.focus();
   };
 
-  // Helper to restore focus to main input after inline edits (rename, add tag, etc.)
   const handleEditEnd = () => {
-    // Use timeout to ensure any local blur events settle and components unmount
     setTimeout(() => {
         inputRef.current?.focus();
     }, 10);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Handle Backspace to exit Command Active Mode (when input is empty)
     if (e.key === 'Backspace') {
       if (inputMode === InputMode.COMMAND_ACTIVE && query.length === 0) {
         e.preventDefault();
@@ -365,35 +565,21 @@ const App: React.FC = () => {
       }
     }
     
-    // Keyboard Reordering for Pinned Tabs (Alt + Up/Down)
     if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
         e.preventDefault();
-        const currentTab = filteredTabs[selectedTabIndex];
+        // Reordering only supported in LIST mode
+        if (viewMode === ViewMode.GROUPS || viewMode === ViewMode.BOOKMARKS) return;
+
+        const currentTab = visibleTabs[selectedTabIndex];
         
         if (currentTab && currentTab.isPinned) {
-            // Get only pinned tabs from the filtered list to determine neighbors
-            const pinnedTabs = filteredTabs.filter(t => t.isPinned);
             const currentIndexInPinned = pinnedTabs.findIndex(t => t.id === currentTab.id);
             
             if (e.key === 'ArrowUp' && currentIndexInPinned > 0) {
                 const targetTab = pinnedTabs[currentIndexInPinned - 1];
                 handleReorderPinnedTabs(currentTab.id, targetTab.id);
             } else if (e.key === 'ArrowDown' && currentIndexInPinned < pinnedTabs.length - 1) {
-                const targetTab = pinnedTabs[currentIndexInPinned + 1];
-                handleReorderPinnedTabs(currentTab.id, targetTab.id); // Insert before next is effectively swapping down
-                // Actually, inserting before the next one swaps active with next.
-                // If I am A, and Next is B. I want to be after B.
-                // Reorder(A, B) inserts A before B. That's not moving down.
-                // Reorder(A, C) inserts A before C (after B).
-                
-                // Fix for Keyboard: To move DOWN, we need to target the item *after* the immediate neighbor
-                // OR use the 'END' logic if it's the second to last item.
-                // Example: [A, B, C]. Move A down. Target C. Result: [B, A, C]. Correct.
-                // Example: [A, B]. Move A down. Target END. Result: [B, A]. Correct.
-                
-                const nextNeighbor = pinnedTabs[currentIndexInPinned + 1];
                 const targetAfterNeighbor = pinnedTabs[currentIndexInPinned + 2];
-                
                 if (targetAfterNeighbor) {
                     handleReorderPinnedTabs(currentTab.id, targetAfterNeighbor.id);
                 } else {
@@ -409,7 +595,7 @@ const App: React.FC = () => {
       if (inputMode === InputMode.COMMAND_SELECT) {
         setSelectedCommandIndex(prev => (prev + 1) % filteredCommands.length);
       } else {
-        setSelectedTabIndex(prev => (prev + 1) % filteredTabs.length);
+        setSelectedTabIndex(prev => (prev + 1) % visibleTabs.length);
       }
     } 
     else if (e.key === 'ArrowUp') {
@@ -417,25 +603,22 @@ const App: React.FC = () => {
       if (inputMode === InputMode.COMMAND_SELECT) {
         setSelectedCommandIndex(prev => (prev - 1 + filteredCommands.length) % filteredCommands.length);
       } else {
-        setSelectedTabIndex(prev => (prev - 1 + filteredTabs.length) % filteredTabs.length);
+        setSelectedTabIndex(prev => (prev - 1 + visibleTabs.length) % visibleTabs.length);
       }
     } 
     else if (e.key === 'Enter') {
       e.preventDefault();
       
       if (inputMode === InputMode.COMMAND_SELECT) {
-        // Logic: Autocomplete first, then enter mode on second Enter
         const cmd = filteredCommands[selectedCommandIndex];
         if (cmd) {
           const fullTrigger = `/${cmd.trigger}`;
-          // If user hasn't typed the full command yet (e.g. "/m"), fill it first
           if (query.toLowerCase() !== fullTrigger.toLowerCase()) {
             setQuery(fullTrigger);
           } else {
-            // If fully typed, enter the mode
             setActiveCommand(cmd);
             setInputMode(InputMode.COMMAND_ACTIVE);
-            setQuery(''); // Clear for argument input
+            setQuery('');
           }
         }
       } 
@@ -445,9 +628,8 @@ const App: React.FC = () => {
         }
       } 
       else if (inputMode === InputMode.SEARCH) {
-        const tab = filteredTabs[selectedTabIndex];
+        const tab = visibleTabs[selectedTabIndex];
         if (tab) {
-          // Standard action: Alert or Switch (simulated)
           alert(`Switching to tab: ${tab.title}`);
         }
       }
@@ -456,19 +638,35 @@ const App: React.FC = () => {
 
   if (!isOpen) {
     return (
-      <div className="flex flex-col items-center gap-4 text-slate-400 mt-20">
+      <div className="fixed inset-0 flex flex-col items-center justify-center text-slate-400">
         <p>Press <span className="font-mono bg-slate-200 px-2 py-1 rounded text-slate-600">Cmd + E</span> to open Tab Commander</p>
       </div>
     );
   }
 
   return (
-    <div className="w-[650px] bg-white rounded-xl shadow-2xl border border-slate-200/80 overflow-hidden flex flex-col text-slate-800 ring-1 ring-slate-900/5 animate-in fade-in zoom-in-95 duration-150">
+    <div 
+        ref={containerRef}
+        className="fixed flex flex-col bg-white rounded-xl shadow-2xl border border-slate-200/80 overflow-hidden text-slate-800 ring-1 ring-slate-900/5 animate-in fade-in zoom-in-95 duration-150"
+        style={{ 
+            left: windowPos.x, 
+            top: windowPos.y,
+            width: windowSize.width,
+            height: windowSize.height,
+            transition: 'none'
+        }}
+    >
+      {/* --- Drag Handle --- */}
+      <div 
+          onMouseDown={handleMouseDownDrag}
+          className="h-5 w-full bg-slate-50 border-b border-slate-100 flex items-center justify-center cursor-grab active:cursor-grabbing shrink-0 z-50"
+          title="Drag to move"
+      >
+         <div className="w-12 h-1 bg-slate-200 rounded-full"></div>
+      </div>
       
       {/* --- Header --- */}
-      <div className="flex items-center px-4 py-3 border-b border-slate-100 bg-white relative z-20 gap-3 transition-all duration-200">
-        
-        {/* Left Icon / Badge Area */}
+      <div className="flex items-center px-4 py-3 border-b border-slate-100 bg-white relative z-20 gap-3 transition-all duration-200 shrink-0">
         {inputMode === InputMode.COMMAND_ACTIVE && activeCommand ? (
           <div className="flex shrink-0 items-center gap-2 bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md border border-slate-200 select-none animate-in zoom-in-95 duration-150">
              <span className="text-slate-400">
@@ -482,12 +680,9 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Input Area */}
         <div className="flex-1 relative h-9 flex items-center">
-          {/* Ghost Text Overlay */}
           {inputMode === InputMode.COMMAND_SELECT && ghostSuffix && (
             <div className="absolute inset-0 pointer-events-none flex items-center text-lg overflow-hidden pl-[1px]" aria-hidden="true">
-              {/* We render the query text invisibly to push the ghost suffix to the right position */}
               <span className="invisible whitespace-pre">{query}</span>
               <span className="text-slate-300">{ghostSuffix}</span>
             </div>
@@ -522,10 +717,13 @@ const App: React.FC = () => {
         </div>
       </div>
 
+      {/* --- Toolbar --- */}
+      <div className="shrink-0">
+        <Toolbar viewMode={viewMode} onViewModeChange={setViewMode} />
+      </div>
+
       {/* --- Body --- */}
-      <div className="relative min-h-[100px] flex flex-col bg-slate-50/50">
-        
-        {/* Command Menu Overlay (Now renders ON TOP of tabs) */}
+      <div className="relative flex-1 flex flex-col bg-slate-50/50 min-h-0">
         {inputMode === InputMode.COMMAND_SELECT && (
           <div className="z-50">
              <CommandMenu 
@@ -541,21 +739,27 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Banner for Active Mark Mode */}
         {inputMode === InputMode.COMMAND_ACTIVE && activeCommand?.id === CommandType.MARK && (
-          <div className="px-4 py-2 bg-indigo-50/50 border-b border-indigo-50 text-xs text-indigo-600 font-medium flex items-center gap-2">
+          <div className="shrink-0 px-4 py-2 bg-indigo-50/50 border-b border-indigo-50 text-xs text-indigo-600 font-medium flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
             <span>Marking Active Tab</span>
           </div>
         )}
         
-        {/* Tab List - Always Rendered */}
-        <div className="relative z-0">
+        <div className="relative z-0 flex-1 flex flex-col min-h-0">
            {inputMode === InputMode.COMMAND_SELECT && (
              <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px] z-40" />
            )}
+           
+           {/* Tab List View */}
            <TabList 
-              tabs={filteredTabs} 
+              viewMode={viewMode}
+              pinnedTabs={pinnedTabs}
+              unpinnedTabs={unpinnedTabs}
+              allTabs={visibleTabs} 
+              bookmarkGroups={bookmarkGroups}
+              isPinnedExpanded={isPinnedExpanded}
+              onTogglePinnedExpanded={() => setIsPinnedExpanded(p => !p)}
               selectedIndex={selectedTabIndex} 
               highlightedTabId={highlightedTabId}
               onSelect={handleTabClick}
@@ -564,24 +768,47 @@ const App: React.FC = () => {
               onAddTag={handleAddTag}
               onRenameTab={handleRenameTab}
               onTogglePin={handleTogglePin}
+              onToggleBookmark={handleToggleBookmark}
+              onMoveBookmark={handleMoveBookmark}
+              onCreateBookmarkGroup={handleCreateBookmarkGroup}
               onEditEnd={handleEditEnd}
               onReorderPinnedTabs={handleReorderPinnedTabs}
+              onOpenDetails={(id) => setDetailTabId(id)}
             />
+
+           {/* Details Overlay */}
+           {detailTab && (
+               <TabDetails 
+                  tab={detailTab}
+                  onClose={() => {
+                      setDetailTabId(null);
+                      setTimeout(() => inputRef.current?.focus(), 50);
+                  }}
+                  onRenameTab={(title) => handleRenameTab(detailTab.id, title)}
+                  onTogglePin={() => handleTogglePin(detailTab.id)}
+                  onToggleBookmark={() => handleToggleBookmark(detailTab.id)}
+                  onAddTag={(tag) => handleAddTag(detailTab.id, tag)}
+                  onRemoveTag={(tag) => handleRemoveTag(detailTab.id, tag)}
+                  onUpdateNote={(note) => handleUpdateNote(detailTab.id, note)}
+               />
+           )}
         </div>
         
         {/* Footer */}
-        <div className="px-4 py-2 bg-white border-t border-slate-100 text-[10px] text-slate-400 flex flex-between items-center shadow-[0_-1px_2px_rgba(0,0,0,0.02)] relative z-20 justify-between">
+        <div className="shrink-0 px-4 py-2 bg-white border-t border-slate-100 text-[10px] text-slate-400 flex flex-between items-center shadow-[0_-1px_2px_rgba(0,0,0,0.02)] relative z-20 justify-between select-none">
             <div className="flex gap-3">
                 {inputMode === InputMode.COMMAND_ACTIVE && activeCommand?.id === CommandType.MARK ? (
                      <span className="text-indigo-500 font-medium">Press Enter to apply tag</span>
                 ) : (
-                    <span>{filteredTabs.length} tabs found</span>
+                    <span>{visibleTabs.length} tabs found</span>
                 )}
             </div>
             <div className="flex gap-3">
-                <span className="flex items-center gap-1">
-                    <kbd className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[9px] font-sans text-slate-500">Alt</kbd> + <kbd className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[9px] font-sans text-slate-500">↑↓</kbd> sort
-                </span>
+                {viewMode === ViewMode.LIST && (
+                   <span className="flex items-center gap-1">
+                       <kbd className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[9px] font-sans text-slate-500">Alt</kbd> + <kbd className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[9px] font-sans text-slate-500">↑↓</kbd> sort
+                   </span>
+                )}
                 <span className="flex items-center gap-1">
                     <kbd className="bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[9px] font-sans text-slate-500">↑↓</kbd> navigate
                 </span>
@@ -592,6 +819,20 @@ const App: React.FC = () => {
         </div>
 
       </div>
+      
+      {/* --- Resize Handles --- */}
+      <div 
+          className="absolute right-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-indigo-500/20 z-50"
+          onMouseDown={(e) => handleMouseDownResize(e, 'right')}
+      />
+      <div 
+          className="absolute left-0 bottom-0 right-0 h-1 cursor-ns-resize hover:bg-indigo-500/20 z-50"
+          onMouseDown={(e) => handleMouseDownResize(e, 'bottom')}
+      />
+      <div 
+          className="absolute right-0 bottom-0 w-4 h-4 cursor-nwse-resize bg-transparent hover:bg-indigo-500/20 rounded-br-xl z-50"
+          onMouseDown={(e) => handleMouseDownResize(e, 'bottom-right')}
+      />
     </div>
   );
 };

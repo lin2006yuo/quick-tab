@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tab, CommandDefinition, CommandType } from './types';
+import { Tab, CommandDefinition, CommandType, BookmarkGroup } from './types';
 import { Tag, XCircle, VolumeX } from 'lucide-react';
 
 // Helper to generate mock data
@@ -11,7 +11,10 @@ const generateTabs = (): Tab[] => [
     favIconUrl: "https://www.google.com/favicon.ico",
     isActive: true,
     tags: [],
-    isPinned: false
+    isPinned: false,
+    isBookmarked: false,
+    bookmarkGroupId: undefined,
+    note: ""
   },
   {
     id: 2,
@@ -20,7 +23,10 @@ const generateTabs = (): Tab[] => [
     favIconUrl: "https://react.dev/favicon.ico",
     isActive: false,
     tags: ["Docs", "Frontend", "Library"],
-    isPinned: false
+    isPinned: false,
+    isBookmarked: false,
+    bookmarkGroupId: undefined,
+    note: ""
   },
   {
     id: 3,
@@ -29,7 +35,10 @@ const generateTabs = (): Tab[] => [
     favIconUrl: "https://tailwindcss.com/favicon.ico",
     isActive: false,
     tags: ["CSS", "Framework", "Utility", "Design System", "Reference"],
-    isPinned: false
+    isPinned: false,
+    isBookmarked: false,
+    bookmarkGroupId: undefined,
+    note: ""
   },
   {
     id: 4,
@@ -38,7 +47,10 @@ const generateTabs = (): Tab[] => [
     favIconUrl: "", 
     isActive: false,
     tags: ["Work", "Jira", "Urgent", "Backend", "Sprint 42"],
-    isPinned: false
+    isPinned: false,
+    isBookmarked: false,
+    bookmarkGroupId: undefined,
+    note: "Needs to be finished by Friday. Check with Sarah about the API endpoints."
   },
   {
     id: 5,
@@ -47,7 +59,10 @@ const generateTabs = (): Tab[] => [
     favIconUrl: "https://github.com/favicon.ico",
     isActive: false,
     tags: ["Open Source", "Code", "Facebook"],
-    isPinned: false
+    isPinned: false,
+    isBookmarked: false,
+    bookmarkGroupId: undefined,
+    note: ""
   },
   {
     id: 6,
@@ -56,7 +71,10 @@ const generateTabs = (): Tab[] => [
     favIconUrl: "https://youtube.com/favicon.ico",
     isActive: false,
     tags: ["Music", "Background", "Chill"],
-    isPinned: false
+    isPinned: false,
+    isBookmarked: false,
+    bookmarkGroupId: undefined,
+    note: ""
   },
   {
     id: 7,
@@ -65,7 +83,10 @@ const generateTabs = (): Tab[] => [
     favIconUrl: "https://stackoverflow.com/favicon.ico",
     isActive: false,
     tags: ["Dev", "Help", "CSS", "Layout", "Flexbox", "Grid"],
-    isPinned: false
+    isPinned: false,
+    isBookmarked: false,
+    bookmarkGroupId: undefined,
+    note: ""
   },
   {
     id: 8,
@@ -74,7 +95,10 @@ const generateTabs = (): Tab[] => [
     favIconUrl: "",
     isActive: false,
     tags: ["Testing", "Edge Case"],
-    isPinned: false
+    isPinned: false,
+    isBookmarked: false,
+    bookmarkGroupId: undefined,
+    note: ""
   },
   {
     id: 9,
@@ -83,7 +107,10 @@ const generateTabs = (): Tab[] => [
     favIconUrl: "",
     isActive: false,
     tags: ["Tag1", "Tag2", "Tag3", "Tag4", "Tag5", "Tag6", "Tag7", "Tag8", "Tag9", "Tag10", "Tag11", "Tag12"],
-    isPinned: false
+    isPinned: false,
+    isBookmarked: false,
+    bookmarkGroupId: undefined,
+    note: ""
   },
   {
     id: 10,
@@ -92,7 +119,10 @@ const generateTabs = (): Tab[] => [
     favIconUrl: "",
     isActive: false,
     tags: ["Super Long Tag Name For Testing Layout", "Another Extremely Long Tag To Check Overflow"],
-    isPinned: false
+    isPinned: false,
+    isBookmarked: false,
+    bookmarkGroupId: undefined,
+    note: ""
   },
   {
     id: 11,
@@ -101,7 +131,10 @@ const generateTabs = (): Tab[] => [
     favIconUrl: "", 
     isActive: false,
     tags: ["DevOps", "Containers"],
-    isPinned: false
+    isPinned: false,
+    isBookmarked: false,
+    bookmarkGroupId: undefined,
+    note: ""
   },
   {
     id: 12,
@@ -110,7 +143,10 @@ const generateTabs = (): Tab[] => [
     favIconUrl: "https://static.figma.com/app/icon/1/favicon.ico",
     isActive: false,
     tags: ["Design", "Work", "Shared"],
-    isPinned: false
+    isPinned: false,
+    isBookmarked: false,
+    bookmarkGroupId: undefined,
+    note: ""
   },
   {
     id: 13,
@@ -119,7 +155,10 @@ const generateTabs = (): Tab[] => [
     favIconUrl: "https://developer.mozilla.org/favicon.ico",
     isActive: false,
     tags: ["Reference"],
-    isPinned: false
+    isPinned: false,
+    isBookmarked: false,
+    bookmarkGroupId: undefined,
+    note: ""
   },
   {
     id: 14,
@@ -128,7 +167,10 @@ const generateTabs = (): Tab[] => [
     favIconUrl: "https://assets.vercel.com/image/upload/q_auto/front/favicon/vercel/57x57.png",
     isActive: false,
     tags: ["Deployment", "Hosting"],
-    isPinned: false
+    isPinned: false,
+    isBookmarked: false,
+    bookmarkGroupId: undefined,
+    note: ""
   },
   {
     id: 15,
@@ -137,11 +179,19 @@ const generateTabs = (): Tab[] => [
     favIconUrl: "https://www.notion.so/images/favicon.ico",
     isActive: false,
     tags: ["Personal", "Notes", "Planning"],
-    isPinned: false
+    isPinned: false,
+    isBookmarked: false,
+    bookmarkGroupId: undefined,
+    note: ""
   }
 ];
 
 export const INITIAL_TABS = generateTabs();
+
+export const INITIAL_BOOKMARK_GROUPS: BookmarkGroup[] = [
+    { id: 'default', title: 'Read Later' },
+    { id: 'work', title: 'Work' }
+];
 
 export const AVAILABLE_COMMANDS: CommandDefinition[] = [
   {
@@ -166,3 +216,12 @@ export const AVAILABLE_COMMANDS: CommandDefinition[] = [
     icon: <VolumeX className="w-4 h-4" />
   }
 ];
+
+export const getDomain = (url: string): string => {
+  try {
+    const domain = new URL(url).hostname;
+    return domain.replace(/^www\./, '');
+  } catch {
+    return 'Other';
+  }
+};

@@ -9,6 +9,9 @@ export interface Tab {
   tags: string[];
   isPinned: boolean;
   pinnedAt?: number;
+  isBookmarked?: boolean;
+  bookmarkGroupId?: string;
+  note?: string; // Additional information
 }
 
 export enum InputMode {
@@ -29,4 +32,15 @@ export interface CommandDefinition {
   label: string;
   icon: React.ReactNode;
   description: string;
+}
+
+export enum ViewMode {
+  LIST = 'LIST',
+  GROUPS = 'GROUPS',
+  BOOKMARKS = 'BOOKMARKS'
+}
+
+export interface BookmarkGroup {
+  id: string;
+  title: string;
 }
