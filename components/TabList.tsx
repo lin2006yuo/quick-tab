@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Tab, ViewMode, BookmarkGroup } from '../types';
 import { getDomain } from '../constants';
-import { Globe, Tag as TagIcon, X, Plus, ArrowUp, ArrowDown, Pin, LayoutGrid, Pencil, GripVertical, ChevronDown, ChevronRight, Star, FolderPlus } from 'lucide-react';
+import { Globe, Tag as TagIcon, X, Plus, ArrowUp, ArrowDown, Pin, LayoutGrid, Pencil, GripVertical, ChevronDown, ChevronRight, Star, FolderPlus, MoreHorizontal } from 'lucide-react';
 
 interface TabListProps {
   viewMode: ViewMode;
@@ -21,8 +21,10 @@ interface TabListProps {
   onRenameTab: (tabId: number, newTitle: string) => void;
   onTogglePin: (tabId: number) => void;
   onToggleBookmark?: (tabId: number) => void;
+  onToggleGroupPin?: (tabId: number) => void;
   onMoveBookmark?: (tabId: number, groupId: string) => void;
   onCreateBookmarkGroup?: (title: string) => void;
+  onRenameBookmarkGroup?: (groupId: string, newTitle: string) => void;
   onEditEnd: () => void;
   onReorderPinnedTabs: (fromId: number, toId: number | 'END') => void;
   onOpenDetails: (tabId: number) => void;
@@ -94,7 +96,7 @@ const TagItem: React.FC<TagItemProps> = ({ tabId, tag, isSelectedRow, onRemove, 
           onKeyDown={handleKeyDown}
           onBlur={handleBlur}
           onClick={(e) => e.stopPropagation()}
-          className="relative z-50 h-[18px] text-[10px] px-1 rounded border border-indigo-300 bg-white outline-none text-slate-700 shadow-sm"
+          className="relative z-50 h-[22px] text-xs px-1 rounded border border-indigo-300 bg-white outline-none text-slate-700 shadow-sm"
           style={{ width: `${Math.max(tag.length * 7, 50)}px`, maxWidth: '150px' }}
         />
       </>
@@ -108,7 +110,7 @@ const TagItem: React.FC<TagItemProps> = ({ tabId, tag, isSelectedRow, onRemove, 
         setIsEditing(true);
       }}
       className={`
-        group/tag shrink-0 flex items-center gap-1 text-[10px] pl-1.5 pr-1.5 py-0.5 rounded border transition-all cursor-text max-w-[150px]
+        group/tag shrink-0 flex items-center gap-1.5 text-xs pl-2 pr-1.5 py-0.5 rounded border transition-all cursor-text max-w-[150px]
         ${isSelectedRow 
           ? 'bg-white text-indigo-600 border-indigo-200 shadow-sm' 
           : 'bg-slate-100 text-slate-500 border-slate-200 hover:border-slate-300'
@@ -116,7 +118,7 @@ const TagItem: React.FC<TagItemProps> = ({ tabId, tag, isSelectedRow, onRemove, 
       `}
       title={tag} // Native tooltip for full tag name if truncated
     >
-      <TagIcon className="w-2.5 h-2.5 opacity-70 shrink-0" />
+      <TagIcon className="w-3.5 h-3.5 opacity-70 shrink-0" />
       <span className="truncate">{tag}</span>
       
       {/* Hover Actions Container */}
@@ -131,7 +133,7 @@ const TagItem: React.FC<TagItemProps> = ({ tabId, tag, isSelectedRow, onRemove, 
             className="ml-1 p-0.5 hover:bg-slate-200 rounded cursor-pointer"
             title="Remove tag"
           >
-            <X className="w-2 h-2 text-slate-400 hover:text-red-500 transition-colors" />
+            <X className="w-3 h-3 text-slate-400 hover:text-red-500 transition-colors" />
           </span>
       </div>
     </button>
@@ -201,7 +203,7 @@ const AddTagButton: React.FC<AddTagButtonProps> = ({ onAdd, onEditEnd }) => {
           onKeyDown={handleKeyDown}
           onBlur={handleBlur}
           onClick={(e) => e.stopPropagation()}
-          className="relative z-50 w-[60px] h-[18px] text-[10px] px-1 rounded border border-indigo-300 bg-white outline-none text-slate-700 placeholder:text-slate-300 shadow-sm"
+          className="relative z-50 w-[70px] h-[22px] text-xs px-1 rounded border border-indigo-300 bg-white outline-none text-slate-700 placeholder:text-slate-300 shadow-sm"
           placeholder="New..."
         />
       </>
@@ -215,10 +217,10 @@ const AddTagButton: React.FC<AddTagButtonProps> = ({ onAdd, onEditEnd }) => {
         setIsAdding(true);
       }}
       onMouseDown={(e) => e.preventDefault()} // Prevent focus loss
-      className="shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-0.5 rounded hover:bg-indigo-50 text-slate-300 hover:text-indigo-500"
+      className="shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-1 rounded hover:bg-indigo-50 text-slate-300 hover:text-indigo-500"
       title="Add tag"
     >
-      <Plus className="w-3 h-3" />
+      <Plus className="w-3.5 h-3.5" />
     </button>
   );
 };
@@ -312,7 +314,7 @@ const TitleItem: React.FC<TitleItemProps> = ({ title, isSelected, isBookmarked, 
                     setIsEditing(true);
                 }}
                 onMouseDown={(e) => e.preventDefault()} // Prevent focus loss
-                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-600"
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-600 shrink-0"
                 title="Rename tab"
             >
                 <Pencil className="w-3 h-3" />
@@ -327,7 +329,7 @@ const TitleItem: React.FC<TitleItemProps> = ({ title, isSelected, isBookmarked, 
                     }}
                     onMouseDown={(e) => e.preventDefault()}
                     className={`
-                        p-1 rounded transition-all
+                        p-1 rounded transition-all shrink-0
                         ${isBookmarked 
                             ? 'text-amber-400 hover:bg-amber-50 opacity-100' 
                             : 'text-slate-300 hover:text-amber-400 hover:bg-amber-50 opacity-0 group-hover:opacity-100'
@@ -341,6 +343,72 @@ const TitleItem: React.FC<TitleItemProps> = ({ title, isSelected, isBookmarked, 
         </div>
     )
 }
+
+// --- Sub-component for Editable Group Title ---
+interface GroupTitleProps {
+    title: string;
+    onRename: (newTitle: string) => void;
+    onEditEnd: () => void;
+}
+
+const GroupTitle: React.FC<GroupTitleProps> = ({ title, onRename, onEditEnd }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [value, setValue] = useState(title);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (isEditing) {
+            inputRef.current?.focus();
+            inputRef.current?.select();
+        }
+    }, [isEditing]);
+
+    const handleBlur = () => {
+        if (value.trim() && value !== title) {
+            onRename(value.trim());
+        } else {
+            setValue(title); // Revert if empty
+        }
+        setIsEditing(false);
+        onEditEnd();
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            handleBlur();
+        } else if (e.key === 'Escape') {
+            setValue(title);
+            setIsEditing(false);
+            onEditEnd();
+        }
+    };
+
+    if (isEditing) {
+        return (
+             <input 
+                ref={inputRef}
+                type="text"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onBlur={handleBlur}
+                className="bg-white border border-indigo-300 rounded px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider text-slate-800 outline-none shadow-sm min-w-[100px]"
+             />
+        );
+    }
+
+    return (
+        <div 
+            onClick={() => setIsEditing(true)}
+            className="group/gtitle flex items-center gap-2 cursor-text"
+            title="Click to rename group"
+        >
+            <span className="text-xs font-bold text-slate-600 uppercase tracking-wider border border-transparent hover:border-slate-200 rounded px-1 py-0.5 transition-colors">
+                {title}
+            </span>
+        </div>
+    );
+};
 
 
 // --- Main Component ---
@@ -362,8 +430,10 @@ const TabList: React.FC<TabListProps> = ({
   onRenameTab,
   onTogglePin,
   onToggleBookmark,
+  onToggleGroupPin,
   onMoveBookmark,
   onCreateBookmarkGroup,
+  onRenameBookmarkGroup,
   onEditEnd,
   onReorderPinnedTabs,
   onOpenDetails
@@ -572,16 +642,16 @@ const TabList: React.FC<TabListProps> = ({
                     title={tab.isPinned ? "Unpin tab" : "Pin tab"}
                 >
                     <div className={`
-                        w-5 h-5 flex items-center justify-center rounded bg-white shadow-sm border transition-colors
+                        w-4 h-4 flex items-center justify-center rounded bg-white shadow-sm border transition-colors
                         ${tab.isPinned 
                             ? 'text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100' 
                             : 'text-slate-400 border-slate-200 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200'
                         }
                     `}>
                         {tab.isPinned ? (
-                            <ArrowDown className="w-3 h-3" />
+                            <ArrowDown className="w-2.5 h-2.5" />
                         ) : (
-                            <ArrowUp className="w-3 h-3" />
+                            <ArrowUp className="w-2.5 h-2.5" />
                         )}
                     </div>
                 </div>
@@ -613,7 +683,7 @@ const TabList: React.FC<TabListProps> = ({
                       </span>
                   )}
                   {viewMode === ViewMode.GROUPS && tab.isPinned && (
-                      <Pin className="w-3 h-3 text-amber-500 ml-1" />
+                      <Pin className="w-3.5 h-3.5 text-amber-500 ml-1 shrink-0" />
                   )}
                   <div className="flex items-center gap-1 overflow-x-auto no-scrollbar mask-linear-gradient">
                     {tab.tags.map(tag => (
@@ -648,7 +718,7 @@ const TabList: React.FC<TabListProps> = ({
 
   // New Component for Bookmark Card
   const renderBookmarkCard = (tab: Tab, index: number) => {
-      const isSelected = index === selectedIndex;
+      // Visual active state (ring/border) removed per user request for cleaner UI in Kanban view
       
       return (
           <div 
@@ -660,29 +730,55 @@ const TabList: React.FC<TabListProps> = ({
             onDragEnd={handleDragEnd}
             className={`
                 group relative flex flex-col gap-2 p-2 rounded-lg border transition-all cursor-pointer
-                ${isSelected 
-                    ? 'bg-indigo-50 border-indigo-500 shadow-sm' 
+                ${tab.isGroupPinned 
+                    ? 'bg-amber-50/60 border-amber-200 hover:bg-amber-50/90' 
                     : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
                 }
             `}
           >
-             <div className="flex items-center gap-2">
-                 {/* Favicon */}
-                 <div className="shrink-0 w-4 h-4 flex items-center justify-center rounded bg-slate-50 border border-slate-100 overflow-hidden">
-                     {tab.favIconUrl ? (
-                        <img src={tab.favIconUrl} alt="" className="w-full h-full object-cover" onError={(e) => {
+             <div className="flex items-center gap-3">
+                 {/* Favicon Area with Pin Interaction (Unified with renderRow) */}
+                 <div className="shrink-0 relative w-4 h-4 flex items-center justify-center group/pin">
+                    <div className="absolute inset-0 flex items-center justify-center rounded bg-white border border-slate-200 overflow-hidden group-hover/pin:opacity-0 transition-opacity duration-200 pointer-events-none">
+                        {tab.favIconUrl ? (
+                            <img src={tab.favIconUrl} alt="" className="w-full h-full object-cover" onError={(e) => {
                             (e.target as HTMLImageElement).style.display = 'none';
-                        }} />
-                    ) : (
-                        <Globe className="w-3 h-3 text-slate-400" />
-                    )}
+                            }} />
+                        ) : (
+                            <Globe className="w-2.5 h-2.5 text-slate-400" />
+                        )}
+                    </div>
+                    
+                    <div 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleGroupPin?.(tab.id);
+                        }}
+                        onMouseDown={(e) => e.preventDefault()} 
+                        className="absolute -inset-3 z-10 flex items-center justify-center cursor-pointer opacity-0 group-hover/pin:opacity-100 transition-opacity duration-200"
+                        title={tab.isGroupPinned ? "Unpin from group" : "Pin to top of group"}
+                    >
+                        <div className={`
+                            w-4 h-4 flex items-center justify-center rounded bg-white shadow-sm border transition-colors
+                            ${tab.isGroupPinned 
+                                ? 'text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100' 
+                                : 'text-slate-400 border-slate-200 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200'
+                            }
+                        `}>
+                            {tab.isGroupPinned ? (
+                                <ArrowDown className="w-2.5 h-2.5" />
+                            ) : (
+                                <ArrowUp className="w-2.5 h-2.5" />
+                            )}
+                        </div>
+                    </div>
                  </div>
                  
                  {/* Title */}
                  <div className="flex-1 min-w-0 overflow-hidden">
                      <TitleItem 
                          title={tab.title}
-                         isSelected={isSelected}
+                         isSelected={false} // Always false to hide selection style
                          onRename={(newTitle) => onRenameTab(tab.id, newTitle)}
                          onEditEnd={onEditEnd}
                          onDoubleClick={() => onOpenDetails(tab.id)}
@@ -695,10 +791,10 @@ const TabList: React.FC<TabListProps> = ({
                         e.stopPropagation();
                         onToggleBookmark?.(tab.id);
                     }}
-                    className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-slate-300 hover:text-amber-500 p-0.5"
+                    className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-slate-300 hover:text-red-500 p-0.5"
                     title="Remove from bookmarks"
                  >
-                     <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                     <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400 hover:fill-none hover:text-red-500" />
                  </button>
              </div>
           </div>
@@ -743,7 +839,7 @@ const TabList: React.FC<TabListProps> = ({
                         <div className="p-0.5 rounded hover:bg-amber-100/50">
                            {isPinnedExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                         </div>
-                        <Pin className="w-3 h-3" fill="currentColor" />
+                        <Pin className="w-3.5 h-3.5" fill="currentColor" />
                         <span className="uppercase tracking-wider">Pinned</span>
                         <span className="ml-auto text-[9px] opacity-60 font-normal">{pinnedTabs.length} items</span>
                     </div>
@@ -796,74 +892,98 @@ const TabList: React.FC<TabListProps> = ({
 
         {/* --- BOOKMARKS VIEW MODE --- */}
         {viewMode === ViewMode.BOOKMARKS && bookmarkGroups && (
-            <div className="p-4 flex flex-col gap-6">
-                {bookmarkGroups.map((group) => {
-                    const groupTabs = allTabs.filter(t => t.bookmarkGroupId === group.id);
-                    const isOver = dragOverGroupId === group.id;
+            <div className="p-4 flex flex-col gap-4">
+                 <style>{`
+                    .thin-scrollbar::-webkit-scrollbar {
+                        width: 6px;
+                        height: 6px;
+                    }
+                    .thin-scrollbar::-webkit-scrollbar-track {
+                        background: transparent;
+                    }
+                    .thin-scrollbar::-webkit-scrollbar-thumb {
+                        background-color: rgba(203, 213, 225, 0.5);
+                        border-radius: 3px;
+                    }
+                    .thin-scrollbar::-webkit-scrollbar-thumb:hover {
+                        background-color: rgba(148, 163, 184, 0.8);
+                    }
+                    /* Firefox */
+                    .thin-scrollbar {
+                        scrollbar-width: thin;
+                        scrollbar-color: rgba(203, 213, 225, 0.5) transparent;
+                    }
+                `}</style>
+                <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(280px,1fr))] items-start">
+                    {bookmarkGroups.map((group) => {
+                        const groupTabs = allTabs.filter(t => t.bookmarkGroupId === group.id);
+                        const isOver = dragOverGroupId === group.id;
 
-                    return (
-                        <div 
-                            key={group.id} 
-                            className={`flex flex-col gap-2 rounded-lg transition-colors ${isOver ? 'bg-indigo-50 ring-2 ring-indigo-200' : ''}`}
-                            onDragOver={(e) => handleDragOverGroup(e, group.id)}
-                            onDrop={(e) => handleDropOnGroup(e, group.id)}
-                        >
-                             <div className="flex items-center gap-2 px-2 py-1 border-b border-slate-200/50 text-xs font-bold text-slate-600 uppercase tracking-wider">
-                                 <Star className="w-3 h-3 text-amber-400" fill="currentColor" />
-                                 <span>{group.title}</span>
-                                 <span className="ml-auto text-[9px] font-normal opacity-50">{groupTabs.length} items</span>
-                             </div>
+                        return (
+                            <div 
+                                key={group.id} 
+                                className={`flex flex-col gap-2 rounded-lg p-2 bg-slate-50/80 border transition-all ${isOver ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200/60'}`}
+                                onDragOver={(e) => handleDragOverGroup(e, group.id)}
+                                onDrop={(e) => handleDropOnGroup(e, group.id)}
+                            >
+                                <div className="flex items-center gap-2 px-2 py-1">
+                                    <Star className="w-3 h-3 text-amber-400 shrink-0" fill="currentColor" />
+                                    <GroupTitle 
+                                        title={group.title} 
+                                        onRename={(newTitle) => onRenameBookmarkGroup?.(group.id, newTitle)}
+                                        onEditEnd={onEditEnd}
+                                    />
+                                    <span className="ml-auto text-[9px] font-normal opacity-50 bg-white px-1.5 py-0.5 rounded-full border border-slate-100">{groupTabs.length}</span>
+                                </div>
 
-                             <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-                                 {groupTabs.map(tab => {
-                                     // Find index in the global visible list for selection syncing
-                                     const globalIndex = allTabs.findIndex(t => t.id === tab.id);
-                                     return renderBookmarkCard(tab, globalIndex);
-                                 })}
-                                 {groupTabs.length === 0 && (
-                                     <div className="col-span-full py-4 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-lg bg-slate-50/50">
-                                         Drag items here
-                                     </div>
-                                 )}
-                             </div>
-                        </div>
-                    )
-                })}
-
-                {/* Create Group Action */}
-                <div className="mt-2 px-2">
+                                <div 
+                                    className="flex flex-col gap-2 min-h-[50px] max-h-[240px] overflow-y-auto overflow-x-hidden pr-1 thin-scrollbar"
+                                >
+                                    {groupTabs.map(tab => {
+                                        // Find index in the global visible list for selection syncing
+                                        const globalIndex = allTabs.findIndex(t => t.id === tab.id);
+                                        return renderBookmarkCard(tab, globalIndex);
+                                    })}
+                                    {groupTabs.length === 0 && (
+                                        <div className="flex items-center justify-center h-12 text-[10px] text-slate-400 italic border border-dashed border-slate-200 rounded bg-white/50">
+                                            Drop items here
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+                
+                {/* New Group Button */}
+                <div className="mt-2 pt-4 border-t border-slate-100">
                     {isCreatingGroup ? (
-                        <div className="flex items-center gap-2 animate-in fade-in duration-200">
+                        <div className="flex items-center gap-2 max-w-md">
                             <input
                                 ref={groupInputRef}
+                                autoFocus
                                 type="text" 
-                                className="text-sm border border-indigo-300 rounded px-2 py-1 outline-none text-slate-700 w-48 shadow-sm"
-                                placeholder="Group Name..."
                                 value={newGroupName}
                                 onChange={(e) => setNewGroupName(e.target.value)}
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') submitNewGroup();
                                     if (e.key === 'Escape') setIsCreatingGroup(false);
                                 }}
-                                autoFocus
-                                onBlur={() => setTimeout(() => {
-                                    setIsCreatingGroup(false);
-                                }, 200)}
+                                onBlur={() => setIsCreatingGroup(false)}
+                                className="flex-1 px-3 py-1.5 rounded-md border border-indigo-300 text-sm outline-none bg-white shadow-sm"
+                                placeholder="Group Name..."
                             />
-                            <button 
-                                onClick={submitNewGroup}
-                                className="text-xs bg-indigo-500 text-white px-3 py-1 rounded hover:bg-indigo-600 transition-colors"
-                            >
-                                Create
+                            <button onClick={submitNewGroup} className="p-1.5 bg-indigo-500 text-white rounded hover:bg-indigo-600">
+                                <Plus className="w-4 h-4" />
                             </button>
                         </div>
                     ) : (
                         <button 
                             onClick={() => setIsCreatingGroup(true)}
-                            className="flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-indigo-500 transition-colors p-1 rounded hover:bg-slate-100"
+                            className="flex items-center gap-2 text-sm text-slate-400 hover:text-indigo-500 px-2 py-1 transition-colors"
                         >
                             <FolderPlus className="w-4 h-4" />
-                            <span>New Group</span>
+                            <span>Create New Group</span>
                         </button>
                     )}
                 </div>

@@ -2,8 +2,8 @@ import React from 'react';
 import { Tab, CommandDefinition, CommandType, BookmarkGroup } from './types';
 import { Tag, XCircle, VolumeX } from 'lucide-react';
 
-// Helper to generate mock data
-const generateTabs = (): Tab[] => [
+// Helper to generate mock data (Used by ChromeService now)
+export const generateTabs = (): any[] => [
   {
     id: 1,
     title: "Google Gemini API - Developer Guide",
